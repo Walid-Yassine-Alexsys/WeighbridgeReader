@@ -367,7 +367,7 @@ namespace PontBasculeSystem
         {
             weight = 0m;
 
-            // Sanitize to 8 hex chars (4 bytes)
+            // Sanitize to exactly 8 hex chars (4 bytes)
             string hex = new string(hexPayload.Where(Uri.IsHexDigit).ToArray());
             if (hex.Length < 8) return false;
             hex = hex.Substring(0, 8);
@@ -378,100 +378,104 @@ namespace PontBasculeSystem
             byte b2 = Convert.ToByte(hex.Substring(4, 2), 16);
             byte b3 = Convert.ToByte(hex.Substring(6, 2), 16);
 
-            // Nibbles from the middle two bytes carry the digits
-            int n1 = (b1 >> 4) & 0xF; // thousands code
-            int n2 = b1 & 0xF; // hundreds code
-            int n3 = (b2 >> 4) & 0xF; // tens code
-            int n4 = b2 & 0xF; // ones-of-tens code (final value ends with 0)
+            // Frame families
+            bool isF2 = (b0 == 0xF2) && (b3 == 0xE2 || b3 == 0x92 || b3 == 0x22 || b3 == 0x12);
+            bool is8D = (b0 == 0x8D) && (b3 == 0x3A);
 
-            // Frame "family" — 8D..3A behaves slightly differently from F2..E2/92/22/12
-            bool is8D = (b0 == 0x8D && b3 == 0x3A);
-            bool isF2 = (b0 == 0xF2 && (b3 == 0xE2 || b3 == 0x92 || b3 == 0x22 || b3 == 0x12));
+            // Nibbles carrying the 4 digits
+            int n1 = (b1 >> 4) & 0xF; // thousands
+            int n2 = b1 & 0xF; // hundreds
+            int n3 = (b2 >> 4) & 0xF; // tens
+            int n4 = b2 & 0xF; // ones-of-tens (final weight ends with 0)
 
-            // --- d1 (thousands): default 1, except 0xD -> 0
-            int d1 = (n1 == 0xD) ? 0 : 1;
+            // ===== position-specific maps =====
+            // d1 (thousands). From your samples: 0xC -> 1, 0xD -> 0, 0x5 -> 1, 0x6 -> 1
+            int d1 = n1 switch { 0xD => 0, 0xC => 1, 0x5 => 1, 0x6 => 1, _ => 1 }; // default 1
 
-            // --- d2 (hundreds) ---
+            // d2 (hundreds)
             int d2 = -1;
-            if (is8D)
+            if (isF2)
             {
-                // 8D-family
-                d2 = n2 switch
-                {
-                    0xA => 5, // e.g. 8D 5A ..
-                    0xD => 3, // e.g. 8D 6D ..
-                    0x1 => 5, // observed in some C1/B1 cases
-                    _ => -1
-                };
-            }
-            else // F2-family (default)
-            {
+                // F2 family (e.g., F2 CB/CF/CC/C1 ...)
                 d2 = n2 switch
                 {
                     0xB => 4, // CB -> 4
                     0xF => 5, // CF -> 5
                     0xC => 3, // CC -> 3
-                    0x1 => 5, // C1 -> 5 (15360 sample)
+                    0x1 => 5, // C1 -> 5  (F2 C1 B3 12 -> 15360)
                     _ => -1
                 };
             }
-            _logger.LogInformation("The D2 value is: {d2}", d2);
+            else if (is8D)
+            {
+                // 8D family (e.g., 8D 5A / 8D 6D ...)
+                d2 = n2 switch
+                {
+                    0xA => 5, // 5A -> 5
+                    0xD => 3, // 6D -> 3
+                    0x1 => 5, // (observed)
+                    _ => -1
+                };
+            }
+            if (d2 < 0) { LogUnknown("d2", b0, b3, n2); return false; }
 
-            if (d2 < 0) return false;
-
-            // --- d3 (tens) ---
+            // d3 (tens)
             int d3 = -1;
-            if (is8D)
+            if (isF2)
             {
-                // 8D-family tweak: A -> 8 (to satisfy 8D6DA83A -> 13820)
                 d3 = n3 switch
                 {
-                    0x3 => 6, // ..33/32 -> 6
-                    0xA => 8, // ..A8 -> 8
+                    0xA => 2, // ..A? -> 2     (F2 CB AB E2 -> 14280)
+                    0xF => 4, // ..F? -> 4     (F2 CF F9 E2 -> 15440)
+                    0x5 => 7, // ..5? -> 7     (F2 CC 58 92 -> 13780)
+                    0x3 => 6, // ..3? -> 6     (F2 C1 B3 12 -> 15360)
+                    0x7 => 3, // ..7? -> 3     (F2 D1 74 22 -> 6320)
+                    0xB => 3, // ..B? -> 3     (seen)
+                    _ => -1
+                };
+            }
+            else if (is8D)
+            {
+                d3 = n3 switch
+                {
+                    0xA => 8, // ..A8 -> 8     (8D 6D A8 3A -> 13820)
+                    0x3 => 6, // ..32/33 -> 6  (8D 5A 32 3A -> 15620)
                     0x5 => 7, // ..58 -> 7
-                    0x7 => 3, // ..74 -> 3 (6320 sample)
-                    0xB => 3, // ..B3 -> 3 (15360 sample seen in F2 but harmless here)
-                    0xF => 4, // keep common mapping
-                    _ => -1
-                };
-            }
-            else // F2-family
-            {
-                d3 = n3 switch
-                {
-                    0xA => 2, // ..A? -> 2
+                    0x7 => 3, // ..74 -> 3     (fits 6320 pattern in 8D family if it appears)
+                    0xB => 3, // ..B3 -> 3
                     0xF => 4, // ..F? -> 4
-                    0x5 => 7, // ..5? -> 7
-                    0x3 => 6, // ..3? -> 6
-                    0x7 => 3, // ..7? -> 3
-                    0xB => 3, // ..B? -> 3 (15360)
                     _ => -1
                 };
             }
-            _logger.LogInformation("The D3 value is: {d3}", d3);
+            if (d3 < 0) { LogUnknown("d3", b0, b3, n3); return false; }
 
-            if (d3 < 0) return false;
-
-            // --- d4 (ones-of-tens) — common to both families (from your pairs)
+            // d4 (ones-of-tens) — common to both families from your pairs
             int d4 = n4 switch
             {
-                0xB => 8, // ..B
-                0x9 => 4, // ..9
-                0x8 => 8, // ..8
-                0x2 => 2, // ..2
-                0x4 => 2, // ..4
-                0x3 => 6, // ..3
+                0xB => 8,
+                0x9 => 4,
+                0x8 => 8,
+                0x2 => 2,
+                0x4 => 2,
+                0x3 => 6,
                 _ => -1
             };
-            _logger.LogInformation("The D4 value is: {d4}", d4);
+            if (d4 < 0) { LogUnknown("d4", b0, b3, n4); return false; }
 
-            if (d4 < 0) return false;
-
-            // Build number and scale to kg (your values always end with 0)
-            int rawDigits = d1 * 1000 + d2 * 100 + d3 * 10 + d4;
-            weight = rawDigits * 10m;
-            _logger.LogInformation("Weight decoded via Hex Function is: {weight}", weight);
+            // Assemble the value and scale to kg (your outputs always end with 0)
+            int digits = d1 * 1000 + d2 * 100 + d3 * 10 + d4;
+            weight = digits * 10m;
             return true;
+        }
+
+        private void LogUnknown(string pos, byte b0, byte b3, int nibble)
+        {
+            try
+            {
+                var line = $"{DateTime.Now:O},pos={pos},family=0x{b0:X2}..0x{b3:X2},nibble=0x{nibble:X1}\n";
+                File.AppendAllText(Path.Combine(AppContext.BaseDirectory, "unknown_nibbles.log"), line);
+            }
+            catch { /* ignore */ }
         }
         private bool TryParseAsciiWeight(string line, out decimal weight)
         {
