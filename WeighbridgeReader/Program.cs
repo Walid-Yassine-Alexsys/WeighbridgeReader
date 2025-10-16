@@ -25,7 +25,7 @@ namespace PontBasculeSystem
     public sealed class SimulationSettings { public bool Simulate { get; init; } }
     public sealed class TcpOptions
     {
-        public string DeviceIp { get; init; } = GetEnv("PONT_DEVICE_IP", "10.116.136.22");
+        public string DeviceIp { get; init; } = GetEnv("PONT_DEVICE_IP", "192.168.0.6");
         public int DevicePort { get; init; } = GetEnv("PONT_DEVICE_PORT", 4001);
         public int ReceiveBufferSize { get; init; } = GetEnv("PONT_RECV_BUF", 8192);
         public int IdleReconnectSeconds { get; init; } = GetEnv("PONT_IDLE_RECONN_SEC", 30);
