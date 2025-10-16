@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36518.9 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WeighbridgeReader", "WeighbridgeReader\WeighbridgeReader.csproj", "{ECDBA9A0-FC85-48D6-8101-DAD578E4A035}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ECDBA9A0-FC85-48D6-8101-DAD578E4A035}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ECDBA9A0-FC85-48D6-8101-DAD578E4A035}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ECDBA9A0-FC85-48D6-8101-DAD578E4A035}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ECDBA9A0-FC85-48D6-8101-DAD578E4A035}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3BFF88A7-9309-45D4-8FAE-98B505E14EBB}
+	EndGlobalSection
+EndGlobal
